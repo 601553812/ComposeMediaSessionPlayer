@@ -3,6 +3,7 @@ package com.pxh.composemediasessionplayer.view
 import android.content.ComponentName
 import android.content.Intent
 import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.support.v4.media.MediaBrowserCompat
 import android.support.v4.media.MediaMetadataCompat
@@ -11,12 +12,14 @@ import android.support.v4.media.session.PlaybackStateCompat
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -34,6 +37,7 @@ import com.pxh.composemediasessionplayer.service.MyService
 import com.pxh.composemediasessionplayer.ui.theme.ComposeMediaSessionPlayerTheme
 import com.pxh.composemediasessionplayer.util.Util
 import com.pxh.composemediasessionplayer.viewModel.MyViewModel
+private const val TAG  = "MainActivity"
 
 class MainActivity : ComponentActivity() {
     private val connectionCallbacks = object : MediaBrowserCompat.ConnectionCallback() {
@@ -70,6 +74,7 @@ class MainActivity : ComponentActivity() {
 //
 
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         myViewModel = ViewModelProvider(this)[MyViewModel::class.java]
 
@@ -84,8 +89,8 @@ class MainActivity : ComponentActivity() {
             }
         }
         super.onCreate(savedInstanceState)
-        startService(Intent(this, MyService::class.java))
-        Log.e("MainActivity", "onCreate: ")
+        startForegroundService(Intent(this, MyService::class.java))
+        Log.e(TAG, "onCreate: ")
         setContent {
             ComposeMediaSessionPlayerTheme {
                 Surface(
@@ -105,7 +110,7 @@ class MainActivity : ComponentActivity() {
     public override fun onResume() {
         super.onResume()
         volumeControlStream = AudioManager.STREAM_MUSIC
-        if (!myViewModel.backAllowed) {
+        if (!myViewModel.backAllowed.value!!) {
             myViewModel.mediaController.transportControls.play()
         }
     }
@@ -121,7 +126,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        if (!myViewModel.backAllowed) {
+        if (!myViewModel.backAllowed.value!!) {
             myViewModel.mediaController.transportControls.pause()
         }
     }
@@ -151,16 +156,17 @@ class MainActivity : ComponentActivity() {
                     metadata.getString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID),
                     metadata.getString(MediaMetadataCompat.METADATA_KEY_TITLE),
                     metadata.getString(MediaMetadataCompat.METADATA_KEY_ARTIST),
-                    metadata.getString(MediaMetadataCompat.METADATA_KEY_ALBUM)
+                    metadata.getString(MediaMetadataCompat.METADATA_KEY_ALBUM),
+                    metadata.getString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID).startsWith("android.resource://com.pxh.composemediasessionplayer/")
                 ).apply {
                     length = metadata.getLong(MediaMetadataCompat.METADATA_KEY_DURATION).toInt()
                 })
-            Log.e("MainActivity", "onMetadataChanged: ${myViewModel.song}")
+            Log.e(TAG, "onMetadataChanged: ${myViewModel.song}")
         }
 
         override fun onPlaybackStateChanged(state: PlaybackStateCompat) {
-            myViewModel.playState = state.state == PlaybackStateCompat.STATE_PLAYING
-            Log.e("MainActivity", "onPlaybackStateChanged: ${System.currentTimeMillis()}")
+            myViewModel.playState.value = state.state == PlaybackStateCompat.STATE_PLAYING
+            Log.e(TAG, "onPlaybackStateChanged: ${System.currentTimeMillis()}")
         }
     }
 
@@ -190,17 +196,16 @@ fun GreetingWithStates(myViewModel: MyViewModel, controller: NavController) {
 
 @Composable
 fun Greeting(myViewModel: MyViewModel, controller: NavController) {
-    val checkedState = remember { mutableStateOf(true) }
-    val playState = remember { mutableStateOf(true) }
+    val checkedState = myViewModel.backAllowed.observeAsState()
+    val playState = myViewModel.playState.observeAsState()
 
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxHeight(0.2f)) {
             Text(text = "后台播放", fontSize = 30.sp)
             Switch(
-                checked = checkedState.value,
+                checked = checkedState.value!!,
                 onCheckedChange = {
-                    checkedState.value = it
-                    myViewModel.backAllowed = it
+                    myViewModel.backAllowed.value = it
                 }
             )
         }
@@ -211,11 +216,10 @@ fun Greeting(myViewModel: MyViewModel, controller: NavController) {
         Text(text = "歌曲时长:${myViewModel.song.value.showTime()}")
         Button(modifier = Modifier.fillMaxWidth(),
             onClick = {
-                if (myViewModel.playState) myViewModel.mediaController.transportControls.pause() else myViewModel.mediaController.transportControls.play()
-                playState.value = !playState.value
-                Log.e("", "Greeting: ${myViewModel.song.value}")
+                if (myViewModel.playState.value!!) myViewModel.mediaController.transportControls.pause() else myViewModel.mediaController.transportControls.play()
+                Log.e(TAG, "Greeting:playState:${playState.value} ,songInfo:${myViewModel.song.value}")
             }) {
-            Text(text = if (playState.value) "暂停" else "播放")
+            Text(text = if (playState.value==true) "暂停" else "播放")
         }
         Button(modifier = Modifier.fillMaxWidth(),
             onClick = {

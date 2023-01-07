@@ -3,19 +3,55 @@ package com.pxh.composemediasessionplayer.viewModel
 import android.support.v4.media.MediaBrowserCompat
 import android.support.v4.media.session.MediaControllerCompat
 import androidx.compose.runtime.mutableStateOf
-import androidx.lifecycle.LiveData
+import androidx.core.app.NotificationChannelCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.pxh.composemediasessionplayer.model.SongBean
 
 class MyViewModel : ViewModel() {
-    val song = mutableStateOf(SongBean("id","title","artist","album"))
+    /**
+     * 默认播放歌曲.
+     */
+    val song = mutableStateOf(SongBean("id","title","artist","album",true))
+
+    /**
+     * 歌曲列表.
+     */
     var songList = ArrayList<SongBean>()
+
+    /**
+     * 是否翻转播放列表.
+     */
     private var reverse = false
+
+    /**
+     * MediaBrowser对象,负责接受Service发来的信息.
+     */
     lateinit var mediaBrowser: MediaBrowserCompat
+
+    /**
+     * MediaController对象,负责向Service发送用户的点击事件.
+     */
     lateinit var mediaController: MediaControllerCompat
-    var playState = true
-    var backAllowed = true
+
+    /**
+     * 当前播放状态.
+     * true:正在播放
+     * false:暂停
+     */
+    var playState = MutableLiveData<Boolean>(true)
+
+    /**
+     * 是否允许背景播放.
+     *
+     */
+    var backAllowed = MutableLiveData<Boolean>(true)
+
+    private lateinit var notificationBuilder: NotificationCompat.Builder
+    private lateinit var notificationManager: NotificationManagerCompat
+    private lateinit var notificationChannel: NotificationChannelCompat
     fun getSong(): SongBean {
         return song.value!!
     }
