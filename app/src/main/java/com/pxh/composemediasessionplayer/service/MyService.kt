@@ -1,6 +1,6 @@
 package com.pxh.composemediasessionplayer.service
 
-import android.app.Notification
+
 import android.media.AudioManager
 import android.media.AudioManager.*
 import android.media.MediaPlayer
@@ -14,28 +14,20 @@ import android.support.v4.media.session.PlaybackStateCompat
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.RequiresApi
-import androidx.core.app.NotificationChannelCompat
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.MutableLiveData
 import androidx.media.AudioAttributesCompat
 import androidx.media.AudioFocusRequestCompat
 import androidx.media.AudioManagerCompat
 import androidx.media.MediaBrowserServiceCompat
-import com.pxh.composemediasessionplayer.R
 import com.pxh.composemediasessionplayer.model.SongBean
 import com.pxh.composemediasessionplayer.util.Util
 
 private const val MY_MEDIA_ROOT_ID = "media_root_id"
 private const val MY_EMPTY_MEDIA_ROOT_ID = "empty_root_id"
 private const val TAG = "MyService"
-private const val CHANNEL_NAME = "MusicChannel"
+
 
 class MyService : MediaBrowserServiceCompat() {
-    private lateinit var notificationBuilder: NotificationCompat.Builder
-    private lateinit var notificationManager: NotificationManagerCompat
-    private lateinit var notificationChannel: NotificationChannelCompat
-    private lateinit var notification: Notification
 
     private lateinit var mediaSession: MediaSessionCompat
     private lateinit var stateBuilder: PlaybackStateCompat.Builder
@@ -45,6 +37,7 @@ class MyService : MediaBrowserServiceCompat() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     private val requestBuilder = AudioFocusRequestCompat.Builder(AudioManagerCompat.AUDIOFOCUS_GAIN)
+
     @RequiresApi(Build.VERSION_CODES.O)
     val mOnAudioFocusChangeListener =
         OnAudioFocusChangeListener { focusChange ->
@@ -65,8 +58,10 @@ class MyService : MediaBrowserServiceCompat() {
                 else -> {}
             }
         }
+
     @RequiresApi(Build.VERSION_CODES.O)
-    private var request: AudioFocusRequestCompat = requestBuilder.setOnAudioFocusChangeListener (mOnAudioFocusChangeListener).build()
+    private var request: AudioFocusRequestCompat =
+        requestBuilder.setOnAudioFocusChangeListener(mOnAudioFocusChangeListener).build()
     private lateinit var audioManager: AudioManager
     private val mySessionCallback = MySessionCallback()
     private var focus = MutableLiveData<Int>(AUDIOFOCUS_GAIN)
@@ -84,7 +79,6 @@ class MyService : MediaBrowserServiceCompat() {
             }
             prepare()
 
-            setNotificationInfo(songList[pos])
         }
     }.apply {
         setOnPreparedListener {
@@ -108,15 +102,6 @@ class MyService : MediaBrowserServiceCompat() {
         releaseAudioFocus()
     }
 
-    private fun setNotificationInfo(songBean: SongBean){
-        notificationBuilder.apply {
-            setContentTitle(songBean.title)
-            setContentText(songBean.artist+songBean.showTime())
-            setSmallIcon(R.mipmap.ic_launcher)
-        }
-        notification = notificationBuilder.build()
-        notificationManager.notify(1,notification)
-    }
     @RequiresApi(Build.VERSION_CODES.O)
     private fun releaseAudioFocus() {
         AudioManagerCompat.abandonAudioFocusRequest(audioManager, request)
@@ -130,16 +115,10 @@ class MyService : MediaBrowserServiceCompat() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate() {
         super.onCreate()
-        notificationChannel = NotificationChannelCompat.Builder(
-            this.packageName,
-            NotificationManagerCompat.IMPORTANCE_DEFAULT
-        ).build()
-        audioManager =  getSystemService(AUDIO_SERVICE) as AudioManager
+        audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         requestBuilder.setAudioAttributes(attributesBuilder.build())
             .setOnAudioFocusChangeListener(mOnAudioFocusChangeListener)
         request = requestBuilder.build()
-        notificationBuilder = NotificationCompat.Builder(this, this.packageName)
-        notificationManager = NotificationManagerCompat.from(this)
         requestAudioFocus()
         // Create a MediaSessionCompat
         mediaSession = MediaSessionCompat(baseContext, "MBServiceCompat").apply {
@@ -164,10 +143,9 @@ class MyService : MediaBrowserServiceCompat() {
             // Set the session's token so that client activities can communicate with it.
             setSessionToken(sessionToken)
         }
-        setNotificationInfo(SongBean("","","","",false))
-        startForeground(1,notification)
 
     }
+
 
     override fun onGetRoot(
         clientPackageName: String,
@@ -248,7 +226,11 @@ class MyService : MediaBrowserServiceCompat() {
 
         override fun onPlayFromUri(uri: Uri, extras: Bundle?) {
             mediaPlayer.reset()
-            mediaPlayer.setDataSource(this@MyService, uri)
+            if (songList[pos].isInApp) {
+                mediaPlayer.setDataSource(this@MyService, Util.transportUri(songList[pos].id))
+            } else {
+                mediaPlayer.setDataSource(songList[pos].id)
+            }
             mediaPlayer.prepare()
             for (i in songList.indices) {
                 if (songList[i].id == Util.transportId(uri)) {

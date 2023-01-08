@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         super.onCreate(savedInstanceState)
-        startForegroundService(Intent(this, MyService::class.java))
+        startService(Intent(this, MyService::class.java))
         Log.e(TAG, "onCreate: ")
         setContent {
             ComposeMediaSessionPlayerTheme {

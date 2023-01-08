@@ -3,9 +3,6 @@ package com.pxh.composemediasessionplayer.viewModel
 import android.support.v4.media.MediaBrowserCompat
 import android.support.v4.media.session.MediaControllerCompat
 import androidx.compose.runtime.mutableStateOf
-import androidx.core.app.NotificationChannelCompat
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.pxh.composemediasessionplayer.model.SongBean
@@ -14,7 +11,7 @@ class MyViewModel : ViewModel() {
     /**
      * 默认播放歌曲.
      */
-    val song = mutableStateOf(SongBean("id","title","artist","album",true))
+    val song = mutableStateOf(SongBean("id", "title", "artist", "album", true))
 
     /**
      * 歌曲列表.
@@ -49,11 +46,8 @@ class MyViewModel : ViewModel() {
      */
     var backAllowed = MutableLiveData<Boolean>(true)
 
-    private lateinit var notificationBuilder: NotificationCompat.Builder
-    private lateinit var notificationManager: NotificationManagerCompat
-    private lateinit var notificationChannel: NotificationChannelCompat
     fun getSong(): SongBean {
-        return song.value!!
+        return song.value
     }
 
     fun setSong(newSong: SongBean) {
