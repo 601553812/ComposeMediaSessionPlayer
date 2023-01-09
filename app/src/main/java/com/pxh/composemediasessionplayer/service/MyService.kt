@@ -1,6 +1,13 @@
 package com.pxh.composemediasessionplayer.service
 
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.graphics.Color
 import android.media.AudioManager
 import android.media.AudioManager.*
 import android.media.MediaPlayer
@@ -14,13 +21,17 @@ import android.support.v4.media.session.PlaybackStateCompat
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.core.app.NotificationCompat
 import androidx.lifecycle.MutableLiveData
 import androidx.media.AudioAttributesCompat
 import androidx.media.AudioFocusRequestCompat
 import androidx.media.AudioManagerCompat
 import androidx.media.MediaBrowserServiceCompat
+import com.pxh.composemediasessionplayer.R
 import com.pxh.composemediasessionplayer.model.SongBean
 import com.pxh.composemediasessionplayer.util.Util
+import com.pxh.composemediasessionplayer.view.MainActivity
+
 
 private const val MY_MEDIA_ROOT_ID = "media_root_id"
 private const val MY_EMPTY_MEDIA_ROOT_ID = "empty_root_id"
@@ -29,15 +40,36 @@ private const val TAG = "MyService"
 
 class MyService : MediaBrowserServiceCompat() {
 
+    /**
+     * 负责通知Activity当前播放状态的MediaSession对象.
+     */
     private lateinit var mediaSession: MediaSessionCompat
+
+    /**
+     * 负责创建播放状态对象.
+     */
     private lateinit var stateBuilder: PlaybackStateCompat.Builder
+
+    /**
+     * 播放列表.
+     */
     private lateinit var songList: ArrayList<SongBean>
+
+    /**
+     * 音频焦点申请参数.
+     */
     private val attributesBuilder =
         AudioAttributesCompat.Builder().apply { setUsage(AudioAttributesCompat.USAGE_MEDIA) }
 
+    /**
+     * 音频焦点申请对象建造者.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     private val requestBuilder = AudioFocusRequestCompat.Builder(AudioManagerCompat.AUDIOFOCUS_GAIN)
 
+    /**
+     * 焦点变化监听器.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     val mOnAudioFocusChangeListener =
         OnAudioFocusChangeListener { focusChange ->
@@ -59,24 +91,47 @@ class MyService : MediaBrowserServiceCompat() {
             }
         }
 
+    /**
+     * 焦点申请对象.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     private var request: AudioFocusRequestCompat =
         requestBuilder.setOnAudioFocusChangeListener(mOnAudioFocusChangeListener).build()
+
+    /**
+     * 焦点管理者.
+     */
     private lateinit var audioManager: AudioManager
+
+    /**
+     * 负责接受Activity发来的事件的对象.
+     */
     private val mySessionCallback = MySessionCallback()
-    private var focus = MutableLiveData<Int>(AUDIOFOCUS_GAIN)
+
+    /**
+     * 当前焦点状态.
+     */
+    private var focus = MutableLiveData(AUDIOFOCUS_GAIN)
+
+    /**
+     * 音频信息列表.
+     */
     private val mediaItems: ArrayList<MediaBrowserCompat.MediaItem> = ArrayList()
+
+    /**
+     * 当前播放歌曲在播放列表中的位置.
+     */
     private var pos = 0
+
+    /**
+     * 播放器对象.
+     */
     private var mediaPlayer = MediaPlayer().apply {
         setOnCompletionListener {
             pos++
             pos = Util.posCheck(pos, songList.size)
             reset()
-            if (songList[pos].isInApp) {
-                setDataSource(this@MyService, Util.transportUri(songList[pos].id))
-            } else {
-                setDataSource(songList[pos].id)
-            }
+            setDataSourceForSong(songList[pos], it)
             prepare()
 
         }
@@ -92,7 +147,51 @@ class MyService : MediaBrowserServiceCompat() {
             }
         }
     }
+
+    /**
+     * metadata对象列表.
+     */
     private var metadataList: ArrayList<MediaMetadataCompat> = ArrayList()
+
+    private fun createForegroundNotification(): Notification {
+        val notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        // 唯一的通知通道的id.
+        val notificationChannelId = "notification_channel_id_01"
+        // Android8.0以上的系统，新建消息通道
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            //用户可见的通道名称
+            val channelName = "Foreground Service Notification"
+            //通道的重要程度
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val notificationChannel =
+                NotificationChannel(notificationChannelId, channelName, importance)
+            notificationChannel.description = "Channel description"
+            //LED灯
+            notificationChannel.enableLights(true)
+            notificationChannel.lightColor = Color.RED
+            //震动
+            notificationChannel.vibrationPattern = longArrayOf(0, 1000, 500, 1000)
+            notificationChannel.enableVibration(true)
+            notificationManager.createNotificationChannel(notificationChannel)
+        }
+        val builder: NotificationCompat.Builder = NotificationCompat.Builder(this, notificationChannelId)
+        //通知小图标
+        builder.setSmallIcon(R.mipmap.zero_small)
+        //通知标题
+        builder.setContentTitle("ContentTitle")
+        //通知内容
+        builder.setContentText("ContentText")
+        //设定通知显示的时间
+        builder.setWhen(System.currentTimeMillis())
+        //设定启动的内容
+        val activityIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent =
+            PendingIntent.getActivity(this, 1, activityIntent, PendingIntent.FLAG_UPDATE_CURRENT)
+        builder.setContentIntent(pendingIntent)
+        //创建通知并返回
+        return builder.build()
+    }
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onDestroy() {
@@ -102,11 +201,30 @@ class MyService : MediaBrowserServiceCompat() {
         releaseAudioFocus()
     }
 
+    /**
+     * 负责设置播放源.
+     * @param songBean 需要设置为播放源的歌曲
+     * @param mediaPlayer 播放器对象
+     */
+    private fun setDataSourceForSong(songBean: SongBean, mediaPlayer: MediaPlayer) {
+        if (songBean.isInApp) {
+            mediaPlayer.setDataSource(this@MyService, Util.transportUri(songBean.id))
+        } else {
+            mediaPlayer.setDataSource(songBean.id)
+        }
+    }
+
+    /**
+     * 释放焦点.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     private fun releaseAudioFocus() {
         AudioManagerCompat.abandonAudioFocusRequest(audioManager, request)
     }
 
+    /**
+     * 申请焦点.
+     */
     @RequiresApi(api = Build.VERSION_CODES.O)
     private fun requestAudioFocus() {
         focus.value = AudioManagerCompat.requestAudioFocus(audioManager, request)
@@ -123,12 +241,6 @@ class MyService : MediaBrowserServiceCompat() {
         // Create a MediaSessionCompat
         mediaSession = MediaSessionCompat(baseContext, "MBServiceCompat").apply {
 
-            // Enable callbacks from MediaButtons and TransportControls
-            setFlags(
-                MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS
-                        or MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS
-            )
-
             // Set an initial PlaybackState with ACTION_PLAY, so media buttons can start the player
             stateBuilder = PlaybackStateCompat.Builder()
                 .setActions(
@@ -143,6 +255,8 @@ class MyService : MediaBrowserServiceCompat() {
             // Set the session's token so that client activities can communicate with it.
             setSessionToken(sessionToken)
         }
+        val notification = createForegroundNotification()
+        startForeground(10,notification)
 
     }
 
@@ -178,11 +292,8 @@ class MyService : MediaBrowserServiceCompat() {
             // and put them in the mediaItems list...
             songList = Util.init(this@MyService)
             for (song in songList) {
-                if (song.isInApp) {
-                    mediaPlayer.setDataSource(this@MyService, Util.transportUri(song.id))
-                } else {
-                    mediaPlayer.setDataSource(song.id)
-                }
+                Log.e(TAG,song.title)
+                setDataSourceForSong(song, mediaPlayer)
                 mediaPlayer.prepare()
                 song.length = mediaPlayer.duration
                 mediaPlayer.reset()
@@ -192,11 +303,7 @@ class MyService : MediaBrowserServiceCompat() {
             mediaSession.sendSessionEvent("list", Bundle().apply {
                 putSerializable("list", songList)
             })
-            if (songList[0].isInApp) {
-                mediaPlayer.setDataSource(this@MyService, Util.transportUri(songList[0].id))
-            } else {
-                mediaPlayer.setDataSource(songList[0].id)
-            }
+            setDataSourceForSong(songList[0], mediaPlayer)
             mediaPlayer.prepare()
             result.sendResult(mediaItems)
         } else result.detach()
@@ -226,11 +333,7 @@ class MyService : MediaBrowserServiceCompat() {
 
         override fun onPlayFromUri(uri: Uri, extras: Bundle?) {
             mediaPlayer.reset()
-            if (songList[pos].isInApp) {
-                mediaPlayer.setDataSource(this@MyService, Util.transportUri(songList[pos].id))
-            } else {
-                mediaPlayer.setDataSource(songList[pos].id)
-            }
+            setDataSourceForSong(songList[pos], mediaPlayer)
             mediaPlayer.prepare()
             for (i in songList.indices) {
                 if (songList[i].id == Util.transportId(uri)) {
@@ -259,15 +362,10 @@ class MyService : MediaBrowserServiceCompat() {
         override fun onSkipToNext() {
             requestAudioFocus()
             if (focus.value == AUDIOFOCUS_GAIN) {
-
                 mediaPlayer.reset()
                 pos++
                 pos = Util.posCheck(pos, songList.size)
-                if (songList[pos].isInApp) {
-                    mediaPlayer.setDataSource(this@MyService, Util.transportUri(songList[pos].id))
-                } else {
-                    mediaPlayer.setDataSource(songList[pos].id)
-                }
+                setDataSourceForSong(songList[pos], mediaPlayer)
                 mediaPlayer.prepare()
                 super.onSkipToNext()
             }
@@ -280,11 +378,7 @@ class MyService : MediaBrowserServiceCompat() {
                 mediaPlayer.reset()
                 pos--
                 pos = Util.posCheck(pos, songList.size)
-                if (songList[pos].isInApp) {
-                    mediaPlayer.setDataSource(this@MyService, Util.transportUri(songList[pos].id))
-                } else {
-                    mediaPlayer.setDataSource(songList[pos].id)
-                }
+                setDataSourceForSong(songList[pos], mediaPlayer)
                 mediaPlayer.prepare()
                 super.onSkipToPrevious()
             }

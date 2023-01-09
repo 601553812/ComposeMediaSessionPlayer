@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,7 +23,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale.Companion.FillBounds
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -32,12 +37,14 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.pxh.composemediasessionplayer.R
 import com.pxh.composemediasessionplayer.model.SongBean
 import com.pxh.composemediasessionplayer.service.MyService
 import com.pxh.composemediasessionplayer.ui.theme.ComposeMediaSessionPlayerTheme
 import com.pxh.composemediasessionplayer.util.Util
 import com.pxh.composemediasessionplayer.viewModel.MyViewModel
-private const val TAG  = "MainActivity"
+
+private const val TAG = "MainActivity"
 
 class MainActivity : ComponentActivity() {
     private val connectionCallbacks = object : MediaBrowserCompat.ConnectionCallback() {
@@ -59,7 +66,6 @@ class MainActivity : ComponentActivity() {
                 MediaControllerCompat(this@MainActivity, myViewModel.mediaBrowser.sessionToken)
             // Finish building the UI
             buildTransportControls()
-
         }
 
         override fun onConnectionSuspended() {
@@ -71,25 +77,26 @@ class MainActivity : ComponentActivity() {
         }
     }
     private lateinit var myViewModel: MyViewModel
-//
 
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
-        myViewModel = ViewModelProvider(this)[MyViewModel::class.java]
-
-        myViewModel.mediaBrowser = MediaBrowserCompat(
-            this,
-            ComponentName(this, MyService::class.java),
-            connectionCallbacks,
-            null // optional Bundle
-        ).apply {
-            if (!isConnected) {
-                connect()
+        if (!::myViewModel.isInitialized) {
+            Log.e(TAG,"onCreate::isNotInit")
+            myViewModel = ViewModelProvider(this)[MyViewModel::class.java]
+            myViewModel.mediaBrowser = MediaBrowserCompat(
+                this,
+                ComponentName(this, MyService::class.java),
+                connectionCallbacks,
+                null // optional Bundle
+            ).apply {
+                if (!isConnected) {
+                    connect()
+                }
             }
         }
         super.onCreate(savedInstanceState)
-        startService(Intent(this, MyService::class.java))
+        startForegroundService(Intent(this, MyService::class.java))
         Log.e(TAG, "onCreate: ")
         setContent {
             ComposeMediaSessionPlayerTheme {
@@ -145,7 +152,9 @@ class MainActivity : ComponentActivity() {
     private var controllerCallback = object : MediaControllerCompat.Callback() {
         override fun onSessionEvent(event: String?, extras: Bundle?) {
             myViewModel.songList =
-                extras?.getSerializable("list").let { it as ArrayList<SongBean> }
+                extras?.getSerializable("list").let {
+                    it as ArrayList<SongBean>
+                }
             super.onSessionEvent(event, extras)
         }
 
@@ -157,7 +166,8 @@ class MainActivity : ComponentActivity() {
                     metadata.getString(MediaMetadataCompat.METADATA_KEY_TITLE),
                     metadata.getString(MediaMetadataCompat.METADATA_KEY_ARTIST),
                     metadata.getString(MediaMetadataCompat.METADATA_KEY_ALBUM),
-                    metadata.getString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID).startsWith("android.resource://com.pxh.composemediasessionplayer/")
+                    metadata.getString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID)
+                        .startsWith("android.resource://com.pxh.composemediasessionplayer/")
                 ).apply {
                     length = metadata.getLong(MediaMetadataCompat.METADATA_KEY_DURATION).toInt()
                 })
@@ -198,46 +208,93 @@ fun GreetingWithStates(myViewModel: MyViewModel, controller: NavController) {
 fun Greeting(myViewModel: MyViewModel, controller: NavController) {
     val checkedState = myViewModel.backAllowed.observeAsState()
     val playState = myViewModel.playState.observeAsState()
+    Box(modifier = Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(id = R.drawable.clover),
+            contentDescription = "A background image filled with clover",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = FillBounds
+        )
+        Column(
+            Modifier
+                .fillMaxWidth()
+        ) {
+            Row(modifier = Modifier.weight(0.2f)) {
+                Text(text = "后台播放", fontSize = 30.sp)
+                Switch(
+                    checked = checkedState.value!!,
+                    onCheckedChange = {
+                        myViewModel.backAllowed.value = it
+                    }
+                )
+            }
+            Column(
+                horizontalAlignment = Alignment.Start, modifier = Modifier
+                    .weight(0.4f)
+                    .fillMaxWidth()
+            ) {
+                Text(
+                    text = "歌曲id:${myViewModel.song.value.id}",
+                    modifier = Modifier.weight(1f),
+                    color = Color.Black
+                )
+                Text(
+                    text = "歌曲名:${myViewModel.song.value.title}",
+                    modifier = Modifier.weight(1f),
+                    color = Color.Black
+                )
+                Text(
+                    text = "歌手:${myViewModel.song.value.artist}",
+                    modifier = Modifier.weight(1f),
+                    color = Color.Black
+                )
+                Text(
+                    text = "专辑:${myViewModel.song.value.album}",
+                    modifier = Modifier.weight(1f),
+                    color = Color.Black
+                )
+                Text(
+                    text = "歌曲时长:${myViewModel.song.value.showTime()}",
+                    modifier = Modifier.weight(1f),
+                    color = Color.Black
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(0.4f),
+                verticalArrangement = Arrangement.Bottom
+            ) {
 
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxHeight(0.2f)) {
-            Text(text = "后台播放", fontSize = 30.sp)
-            Switch(
-                checked = checkedState.value!!,
-                onCheckedChange = {
-                    myViewModel.backAllowed.value = it
+                Button(modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        if (myViewModel.playState.value!!) myViewModel.mediaController.transportControls.pause() else myViewModel.mediaController.transportControls.play()
+                        Log.e(
+                            TAG,
+                            "Greeting:playState:${playState.value} ,songInfo:${myViewModel.song.value}"
+                        )
+                    }) {
+                    Text(text = if (playState.value == true) "暂停" else "播放")
                 }
-            )
-        }
-        Text(text = "歌曲id:${myViewModel.song.value.id}")
-        Text(text = "歌曲名:${myViewModel.song.value.title}")
-        Text(text = "歌手:${myViewModel.song.value.artist}")
-        Text(text = "专辑:${myViewModel.song.value.album}")
-        Text(text = "歌曲时长:${myViewModel.song.value.showTime()}")
-        Button(modifier = Modifier.fillMaxWidth(),
-            onClick = {
-                if (myViewModel.playState.value!!) myViewModel.mediaController.transportControls.pause() else myViewModel.mediaController.transportControls.play()
-                Log.e(TAG, "Greeting:playState:${playState.value} ,songInfo:${myViewModel.song.value}")
-            }) {
-            Text(text = if (playState.value==true) "暂停" else "播放")
-        }
-        Button(modifier = Modifier.fillMaxWidth(),
-            onClick = {
-                myViewModel.mediaController.transportControls.skipToPrevious()
-            }) {
-            Text(text = "上一首")
-        }
-        Button(modifier = Modifier.fillMaxWidth(),
-            onClick = {
-                myViewModel.mediaController.transportControls.skipToNext()
-            }) {
-            Text(text = "下一首")
-        }
-        Button(modifier = Modifier.fillMaxWidth(),
-            onClick = {
-                controller.navigate("list")
-            }) {
-            Text(text = "播放列表")
+                Button(modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        myViewModel.mediaController.transportControls.skipToPrevious()
+                    }) {
+                    Text(text = "上一首")
+                }
+                Button(modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        myViewModel.mediaController.transportControls.skipToNext()
+                    }) {
+                    Text(text = "下一首")
+                }
+                Button(modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        controller.navigate("list")
+                    }) {
+                    Text(text = "播放列表")
+                }
+            }
         }
     }
 }

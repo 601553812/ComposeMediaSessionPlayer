@@ -38,13 +38,13 @@ class MyViewModel : ViewModel() {
      * true:正在播放
      * false:暂停
      */
-    var playState = MutableLiveData<Boolean>(true)
+    var playState = MutableLiveData(true)
 
     /**
      * 是否允许背景播放.
      *
      */
-    var backAllowed = MutableLiveData<Boolean>(true)
+    var backAllowed = MutableLiveData(true)
 
     fun getSong(): SongBean {
         return song.value
