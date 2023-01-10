@@ -7,7 +7,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.media.AudioManager
 import android.media.AudioManager.*
 import android.media.MediaPlayer
@@ -33,12 +32,21 @@ import com.pxh.composemediasessionplayer.util.Util
 import com.pxh.composemediasessionplayer.view.MainActivity
 
 
+private const val notificationChannelId = "notification_channel_id_01"
 private const val MY_MEDIA_ROOT_ID = "media_root_id"
 private const val MY_EMPTY_MEDIA_ROOT_ID = "empty_root_id"
 private const val TAG = "MyService"
+private const val channelName = "Foreground Service Notification"
+
+@RequiresApi(Build.VERSION_CODES.N)
+private const val importance = NotificationManager.IMPORTANCE_MIN
 
 
 class MyService : MediaBrowserServiceCompat() {
+    //通道的重要程度
+    @RequiresApi(Build.VERSION_CODES.O)
+    val notificationChannel =
+        NotificationChannel(notificationChannelId, channelName, importance)
 
     /**
      * 负责通知Activity当前播放状态的MediaSession对象.
@@ -124,6 +132,11 @@ class MyService : MediaBrowserServiceCompat() {
     private var pos = 0
 
     /**
+     *
+     */
+    private lateinit var notification: Notification
+
+    /**
      * 播放器对象.
      */
     private var mediaPlayer = MediaPlayer().apply {
@@ -138,6 +151,7 @@ class MyService : MediaBrowserServiceCompat() {
     }.apply {
         setOnPreparedListener {
             if (focus.value == AUDIOFOCUS_GAIN) {
+                changeNotificationInfo(songList[pos])
                 start()
                 mediaSession.setPlaybackState(
                     stateBuilder.setActions(PlaybackStateCompat.ACTION_PLAY)
@@ -148,34 +162,41 @@ class MyService : MediaBrowserServiceCompat() {
         }
     }
 
+    private fun changeNotificationInfo(songBean: SongBean) {
+        //通知小图标
+        builder.setSmallIcon(R.mipmap.zero_small)
+        //通知标题
+        builder.setContentTitle(songBean.title)
+        //通知内容
+        Log.e(TAG, songBean.artist)
+        builder.setContentText(songBean.artist)
+        //设定通知显示的时间
+        builder.setWhen(System.currentTimeMillis())
+        //设定启动的内容
+        builder.setContentIntent(pendingIntent)
+        Log.e(TAG, notification.toString())
+        notification = builder.build()
+        Log.e(TAG, notification.toString())
+        notificationManager.notify(10, notification)
+    }
+
     /**
      * metadata对象列表.
      */
     private var metadataList: ArrayList<MediaMetadataCompat> = ArrayList()
 
+    private val builder: NotificationCompat.Builder =
+        NotificationCompat.Builder(this, notificationChannelId)
+    private lateinit var notificationManager: NotificationManager
+
     private fun createForegroundNotification(): Notification {
-        val notificationManager =
-            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         // 唯一的通知通道的id.
-        val notificationChannelId = "notification_channel_id_01"
         // Android8.0以上的系统，新建消息通道
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             //用户可见的通道名称
-            val channelName = "Foreground Service Notification"
-            //通道的重要程度
-            val importance = NotificationManager.IMPORTANCE_HIGH
-            val notificationChannel =
-                NotificationChannel(notificationChannelId, channelName, importance)
-            notificationChannel.description = "Channel description"
-            //LED灯
-            notificationChannel.enableLights(true)
-            notificationChannel.lightColor = Color.RED
-            //震动
-            notificationChannel.vibrationPattern = longArrayOf(0, 1000, 500, 1000)
-            notificationChannel.enableVibration(true)
+            notificationChannel.description = "矮人播放器通知频道"
             notificationManager.createNotificationChannel(notificationChannel)
         }
-        val builder: NotificationCompat.Builder = NotificationCompat.Builder(this, notificationChannelId)
         //通知小图标
         builder.setSmallIcon(R.mipmap.zero_small)
         //通知标题
@@ -184,14 +205,14 @@ class MyService : MediaBrowserServiceCompat() {
         builder.setContentText("ContentText")
         //设定通知显示的时间
         builder.setWhen(System.currentTimeMillis())
-        //设定启动的内容
-        val activityIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent =
-            PendingIntent.getActivity(this, 1, activityIntent, PendingIntent.FLAG_UPDATE_CURRENT)
         builder.setContentIntent(pendingIntent)
         //创建通知并返回
         return builder.build()
     }
+
+    //设定启动的内容
+    private lateinit var activityIntent: Intent
+    private lateinit var pendingIntent: PendingIntent
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onDestroy() {
@@ -233,6 +254,11 @@ class MyService : MediaBrowserServiceCompat() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate() {
         super.onCreate()
+        activityIntent = Intent(this, MainActivity::class.java)
+        pendingIntent =
+            PendingIntent.getActivity(this, 1, activityIntent, PendingIntent.FLAG_UPDATE_CURRENT)
+        notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         requestBuilder.setAudioAttributes(attributesBuilder.build())
             .setOnAudioFocusChangeListener(mOnAudioFocusChangeListener)
@@ -255,8 +281,8 @@ class MyService : MediaBrowserServiceCompat() {
             // Set the session's token so that client activities can communicate with it.
             setSessionToken(sessionToken)
         }
-        val notification = createForegroundNotification()
-        startForeground(10,notification)
+        notification = createForegroundNotification()
+        startForeground(10, notification)
 
     }
 
@@ -292,7 +318,7 @@ class MyService : MediaBrowserServiceCompat() {
             // and put them in the mediaItems list...
             songList = Util.init(this@MyService)
             for (song in songList) {
-                Log.e(TAG,song.title)
+                Log.e(TAG, song.title)
                 setDataSourceForSong(song, mediaPlayer)
                 mediaPlayer.prepare()
                 song.length = mediaPlayer.duration

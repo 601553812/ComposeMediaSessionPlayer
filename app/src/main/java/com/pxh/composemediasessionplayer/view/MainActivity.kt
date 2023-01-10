@@ -171,12 +171,10 @@ class MainActivity : ComponentActivity() {
                 ).apply {
                     length = metadata.getLong(MediaMetadataCompat.METADATA_KEY_DURATION).toInt()
                 })
-            Log.e(TAG, "onMetadataChanged: ${myViewModel.song}")
         }
 
         override fun onPlaybackStateChanged(state: PlaybackStateCompat) {
             myViewModel.playState.value = state.state == PlaybackStateCompat.STATE_PLAYING
-            Log.e(TAG, "onPlaybackStateChanged: ${System.currentTimeMillis()}")
         }
     }
 
