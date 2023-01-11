@@ -39,7 +39,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.pxh.composemediasessionplayer.R
 import com.pxh.composemediasessionplayer.model.SongBean
-import com.pxh.composemediasessionplayer.service.MyService
+import com.pxh.composemediasessionplayer.service.NotificationService
+import com.pxh.composemediasessionplayer.service.REVERSE_FLAG
 import com.pxh.composemediasessionplayer.ui.theme.ComposeMediaSessionPlayerTheme
 import com.pxh.composemediasessionplayer.util.Util
 import com.pxh.composemediasessionplayer.viewModel.MyViewModel
@@ -81,12 +82,13 @@ class MainActivity : ComponentActivity() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
+        startForegroundService(Intent(this, NotificationService::class.java))
         if (!::myViewModel.isInitialized) {
-            Log.e(TAG,"onCreate::isNotInit")
+            Log.e(TAG, "onCreate::isNotInit")
             myViewModel = ViewModelProvider(this)[MyViewModel::class.java]
             myViewModel.mediaBrowser = MediaBrowserCompat(
                 this,
-                ComponentName(this, MyService::class.java),
+                ComponentName(this, NotificationService::class.java),
                 connectionCallbacks,
                 null // optional Bundle
             ).apply {
@@ -96,7 +98,6 @@ class MainActivity : ComponentActivity() {
             }
         }
         super.onCreate(savedInstanceState)
-        startForegroundService(Intent(this, MyService::class.java))
         Log.e(TAG, "onCreate: ")
         setContent {
             ComposeMediaSessionPlayerTheme {
@@ -127,7 +128,7 @@ class MainActivity : ComponentActivity() {
         if (myViewModel.mediaBrowser.isConnected) {
             myViewModel.mediaBrowser.disconnect()
             MediaControllerCompat.getMediaController(this)?.unregisterCallback(controllerCallback)
-            stopService(Intent(this, MyService::class.java))
+            stopService(Intent(this, NotificationService::class.java))
         }
     }
 
@@ -301,12 +302,14 @@ fun Greeting(myViewModel: MyViewModel, controller: NavController) {
 fun SongListItem(
     song: SongBean,
     mediaController: MediaControllerCompat,
-    controller: NavController
+    controller: NavController,
+    myViewModel: MyViewModel
 ) {
     Row(
         modifier = Modifier
             .clickable {
                 controller.navigate("main")
+                Log.e(TAG,song.title)
                 mediaController.transportControls.playFromUri(Util.transportUri(song.id), Bundle())
             }
             .fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround
@@ -322,12 +325,13 @@ fun SongListItem(
 
 @Composable
 fun ShowList(myViewModel: MyViewModel, controller: NavController) {
-    val reverseState = remember { mutableStateOf(false) }
+    val reverseState = remember {myViewModel.reverse}
     Column(modifier = Modifier.fillMaxWidth()) {
         Row {
             Switch(checked = reverseState.value, onCheckedChange = {
                 myViewModel.songList.reverse()
                 reverseState.value = !reverseState.value
+                myViewModel.mediaController.transportControls.sendCustomAction(REVERSE_FLAG,Bundle())
             })
             Text(text = "倒转列表")
         }
@@ -338,7 +342,7 @@ fun ShowList(myViewModel: MyViewModel, controller: NavController) {
         }
         LazyColumn {
             items(myViewModel.songList) { song ->
-                SongListItem(song = song, myViewModel.mediaController, controller)
+                SongListItem(song = song, myViewModel.mediaController, controller, myViewModel)
             }
         }
     }

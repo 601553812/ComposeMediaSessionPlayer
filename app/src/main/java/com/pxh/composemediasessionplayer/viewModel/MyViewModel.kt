@@ -21,8 +21,7 @@ class MyViewModel : ViewModel() {
     /**
      * 是否翻转播放列表.
      */
-    private var reverse = false
-
+     var reverse = mutableStateOf(false)
     /**
      * MediaBrowser对象,负责接受Service发来的信息.
      */
@@ -55,7 +54,7 @@ class MyViewModel : ViewModel() {
     }
 
     fun changeReverse() {
-        reverse = !reverse
+        reverse.value = !reverse.value
         songList.reverse()
     }
 
