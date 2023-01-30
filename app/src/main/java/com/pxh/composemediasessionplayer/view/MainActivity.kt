@@ -1,7 +1,9 @@
 package com.pxh.composemediasessionplayer.view
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
@@ -10,6 +12,7 @@ import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaControllerCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.RequiresApi
@@ -82,6 +85,12 @@ class MainActivity : ComponentActivity() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
+        Log.e(TAG,"1")
+        if (!checkLoadLocalMusicPermission()){
+        Log.e(TAG,"2")
+            Toast.makeText(this@MainActivity,"很抱歉,由于权限原因,不能为您播放您的本地歌曲了.",Toast.LENGTH_SHORT).show()
+        }
+
         startForegroundService(Intent(this, NotificationService::class.java))
         if (!::myViewModel.isInitialized) {
             Log.e(TAG, "onCreate::isNotInit")
@@ -109,6 +118,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun checkLoadLocalMusicPermission():Boolean {
+        if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)!=PackageManager.PERMISSION_GRANTED
+            ||checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)!=PackageManager.PERMISSION_GRANTED)
+            requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE,Manifest.permission.READ_EXTERNAL_STORAGE),102)
+        return checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED &&checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED
     }
 
     public override fun onStart() {

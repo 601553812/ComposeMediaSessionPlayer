@@ -105,7 +105,7 @@ class NotificationService : MusicPlayerService() {
         super.onCreate()
         activityIntent = Intent(this, MainActivity::class.java)
         pendingIntent =
-            PendingIntent.getActivity(this, 1, activityIntent, PendingIntent.FLAG_UPDATE_CURRENT)
+            PendingIntent.getActivity(this, 1, activityIntent, PendingIntent.FLAG_MUTABLE)
         notificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
